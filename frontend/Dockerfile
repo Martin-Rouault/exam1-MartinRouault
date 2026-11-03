@@ -6,8 +6,9 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
-ARG REACT_APP_API_URL=http://localhost:5000/api
-ENV REACT_APP_API_URL=$REACT_APP_API_URL
+# URL de l'API figée au build. Sans argument : valeur de .env.production (API Render).
+# Avec --build-arg REACT_APP_API_URL=... (docker-compose en local) : l'argument est prioritaire.
+ARG REACT_APP_API_URL
 RUN npm run build
 
 FROM nginx:stable-alpine

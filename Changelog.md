@@ -23,6 +23,7 @@ Chaque entrée du résumé renvoie à une fiche détaillée (avant / après / po
 #### Modifié — Configuration (préparation du déploiement)
 - Ports des services lus dans la variable `PORT` (injectée par l'hébergeur) → [C-1](#c-1)
 - URL de l'API du frontend configurable (`REACT_APP_API_URL`) au lieu de `localhost:5000` codé en dur → [C-2](#c-2)
+- Le build de production du frontend cible l'API Render (`frontend/.env.production`) → [C-3](#c-3)
 
 #### Corrigé — Backend (E27)
 - Crash du serveur quand MongoDB est indisponible → [B-1](#b-1)
@@ -143,6 +144,19 @@ Chaque entrée du résumé renvoie à une fiche détaillée (avant / après / po
   ```
 - **À savoir** : Create React App intègre `REACT_APP_*` au moment du build. La préprod et la prod nécessitent donc chacune leur propre build.
 - **Vérification** : build avec `REACT_APP_API_URL=https://api.example.test/api` → l'URL est bien présente dans le bundle généré.
+
+<a id="c-3"></a>
+#### C-3 — Build de production du frontend pointant sur l'API Render
+- **Constat** : le front déployé appelait `http://localhost:5000/api`. Le `Dockerfile` du front définissait `ARG REACT_APP_API_URL=http://localhost:5000/api` puis `ENV REACT_APP_API_URL=...`. Sans argument de build, l'URL locale était donc toujours injectée.
+- **Corrections** :
+  - nouveau fichier `frontend/.env.production`, lu automatiquement par `npm run build` :
+    ```
+    REACT_APP_API_URL=https://exam1-martinrouault-1.onrender.com/api
+    ```
+  - `.gitignore` : exception `!frontend/.env.production`, nécessaire car la règle `*.env*` l'aurait exclu du dépôt (et donc de Render). Le fichier ne contient qu'une URL publique, déjà visible dans le bundle JavaScript ;
+  - `frontend/Dockerfile` : `ARG REACT_APP_API_URL` sans valeur par défaut et sans `ENV`. Sans argument, c'est `.env.production` qui s'applique ; avec un argument (`docker-compose.yml` passe `http://localhost:5000/api`), l'argument est prioritaire.
+- **Ordre de priorité** (Create React App) : variable d'environnement déjà définie > `.env.production` > valeur par défaut de `src/config.js`. En développement (`npm start`), `.env.production` n'est pas lu et le front reste sur `localhost:5000`.
+- **Vérification** : build de production → le bundle contient `exam1-martinrouault-1.onrender.com/api` et plus aucune occurrence de `localhost:5000`.
 
 ### Backend
 

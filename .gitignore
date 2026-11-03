@@ -6,6 +6,8 @@ node_modules/
 .env
 *.env*
 !.env.example
+# URL publique de l'API pour le build de production du front (aucun secret)
+!frontend/.env.production
 
 # Docker
 docker-compose.override.yml
