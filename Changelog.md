@@ -203,6 +203,7 @@ Chaque entrée du résumé renvoie à une fiche détaillée (avant / après / po
 | `deploy-preprod` | push sur `develop` | environnement GitHub `preproduction` : appel des Deploy Hooks Render, puis test de fumée sur `/health` |
 | `deploy-prod` | push sur `main` | environnement GitHub `production` (validation manuelle possible via « Required reviewers ») : Deploy Hooks + test de fumée |
 - Les pull requests exécutent la CI sans jamais déployer.
+- Les noms d'images sont construits avec le propriétaire du dépôt converti en minuscules (`${GITHUB_REPOSITORY_OWNER,,}`) : les registres Docker refusent les majuscules (`Martin-Rouault` → `martin-rouault`).
 - Scripts : `.github/scripts/render-deploy.sh` (les URL des hooks sont des secrets, jamais affichées) et `.github/scripts/smoke-test.sh` (attente du build Render et du réveil d'un service gratuit, 20 tentatives).
 - Configuration requise : secrets `RENDER_DEPLOY_HOOK_*` et variables `BACKEND_URL` / `FRONTEND_URL` dans chaque environnement GitHub ; Auto-Deploy désactivé sur Render.
 
