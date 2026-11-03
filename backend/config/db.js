@@ -2,16 +2,18 @@
 const mongoose = require('mongoose');
 require('dotenv').config();
 
+/**
+ * Ouvre la connexion MongoDB à partir de MONGO_URI. Arrête le processus en cas d'échec.
+ * L'URI n'est jamais écrite dans les logs : elle contient l'identifiant et le mot de passe de la base.
+ *
+ * @returns {Promise<void>}
+ */
 const connectDB = async () => {
     try {
-        console.log(`url de la page dans les var env ${process.env.MONGO_URI}`);
-        await mongoose.connect(process.env.MONGO_URI, {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
-        });
+        await mongoose.connect(process.env.MONGO_URI);
         console.log('MongoDB connecté');
     } catch (err) {
-        console.error(err.message);
+        console.error('Connexion MongoDB impossible :', err.message);
         process.exit(1);
     }
 };

@@ -8,6 +8,7 @@ const stockProxy = require('./routes/stock');
 dotenv.config();
 
 const app = express();
+app.disable('x-powered-by');
 
 // Middleware pour analyser les requêtes JSON
 app.use(express.json());
@@ -17,8 +18,11 @@ app.use(express.json());
 app.use('/notify', notifiProxy);
 app.use('/update-stock', stockProxy);
 
-// Lancer le Gateway
-const PORT = process.env.GATEWAY_PORT || 8000;
+// Sonde de santé (supervision, healthcheck Docker / Render)
+app.get('/health', (req, res) => res.json({ status: 'ok', service: 'gateway' }));
+
+// Lancer le Gateway (PORT est injecté par l'hébergeur)
+const PORT = process.env.PORT || process.env.GATEWAY_PORT || 8000;
 app.listen(PORT, () => {
   console.log(`Gateway opérationnel sur le port ${PORT}`);
 });

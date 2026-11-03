@@ -1,32 +1,73 @@
-version: '3'
+name: exam1
+
 services:
-  frontend:
-    build: ./frontend
+  mongo:
+    image: mongo:8
+    restart: unless-stopped
     ports:
-      - '3000:3000'
-    depends_on:
-      - backend
+      - "127.0.0.1:27018:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   backend:
     build: ./backend
-    ports:
-      - '5000:5000'
+    restart: unless-stopped
     environment:
-      - MONGO_URI=mongodb://mongo:27017/mydatabase
-    depends_on:
-      - mongo
-
-  mongo:
-    image: mongo
+      PORT: 5000
+      MONGO_URI: mongodb://mongo:27017/exam1Db
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET doit être défini dans .env}
+      GATEWAY_URL: http://gateway:8000
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY doit être défini dans .env}
+      CORS_ORIGIN: http://localhost:3000
     ports:
-      - '27018:27017'
+      - "5000:5000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  gateway:
+    build: ./gateway
+    restart: unless-stopped
+    environment:
+      GATEWAY_PORT: 8000
+      NOTIFI_SERVICE_URL: http://notifications:4002
+      STOCK_SERVICE_URL: http://stock-management:4003
+    # Pas de port publié : seul le backend appelle le gateway, via le réseau Docker interne
+    depends_on:
+      - notifications
+      - stock-management
 
   notifications:
     build: ./microservices/notifications
-    ports:
-      - '3001:3001'
+    restart: unless-stopped
+    environment:
+      PORT: 4002
+      EMAIL_USER: ${EMAIL_USER:-}
+      EMAIL_APPLICATION_PASSWORD: ${EMAIL_APPLICATION_PASSWORD:-}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY doit être défini dans .env}
 
   stock-management:
     build: ./microservices/stock-management
+    restart: unless-stopped
+    environment:
+      PORT: 4003
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY doit être défini dans .env}
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        REACT_APP_API_URL: http://localhost:5000/api
+    restart: unless-stopped
     ports:
-      - '3002:3002'
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  mongo-data:
