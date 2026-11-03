@@ -4,6 +4,11 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { API_BASE_URL } from "../config";
 
+/**
+ * Page de connexion.
+ * En cas de succès, enregistre le token, le nom et le rôle puis redirige vers l'accueil ;
+ * sinon affiche le message renvoyé par l'API (ex. « Identifiants incorrects »).
+ */
 const Login = () => {
   const [credentials, setCredentials] = useState({
     username: "",

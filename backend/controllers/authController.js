@@ -5,8 +5,17 @@ const User = require('../models/User'); // modèle utilisateur
 require('dotenv').config();
 const axios = require('axios');
 const authLog = require('debug')('authRoutes:console')
+const logger = require('../config/logger');
 //const sendEmail = require('../services/emailService')
 
+/**
+ * Connecte un utilisateur et renvoie un JWT valable 1 heure.
+ *
+ * @route POST /api/auth/login
+ * @param {express.Request} req - `req.body` : `{ username, password }` (validé par `loginSchema`).
+ * @param {express.Response} res - 200 `{ token, role, username }` ; 401 identifiants incorrects ; 500 erreur serveur.
+ * @returns {Promise<void>}
+ */
 exports.login = async (req, res) => {
   const { username, password } = req.body;
   authLog(`tentative de connexion : ${username}`);
@@ -22,7 +31,10 @@ exports.login = async (req, res) => {
 
     // Message identique que l'utilisateur existe ou non : empêche de deviner les comptes existants
     const isMatch = user ? await bcrypt.compare(password, user.password) : false;
-    if (!isMatch) return res.status(401).json({ message: 'Identifiants incorrects.' });
+    if (!isMatch) {
+      logger.warn('audit: échec de connexion', { audit: true, username, ip: req.ip });
+      return res.status(401).json({ message: 'Identifiants incorrects.' });
+    }
 
     const token = jwt.sign(
       { userId: user._id, role: user.role },
@@ -30,14 +42,23 @@ exports.login = async (req, res) => {
       { expiresIn: '1h', algorithm: 'HS256' }
     );
 
+    logger.info('audit: connexion réussie', { audit: true, userId: user._id.toString(), role: user.role, ip: req.ip });
     res.json({ token, role: user.role, username: user.username });
   } catch (error) {
-    console.error('Erreur lors de la connexion', error);
+    logger.error('Erreur lors de la connexion', { error: error.message, stack: error.stack });
     res.status(500).json({ message: 'Erreur serveur' });
   }
 };
 
 
+/**
+ * Crée un compte utilisateur (rôle `user`). Le mot de passe est haché par le modèle `User` (bcrypt).
+ *
+ * @route POST /api/auth/register
+ * @param {express.Request} req - `req.body` : `{ username, email, password }` (validé par `registerSchema`).
+ * @param {express.Response} res - 201 créé ; 400 champ manquant ; 409 email ou nom déjà utilisé ; 500 erreur serveur.
+ * @returns {Promise<void>}
+ */
 exports.register = async (req, res) => {
   const { username, email, password } = req.body;
   authLog(`inscription : ${username}`);
@@ -62,6 +83,7 @@ exports.register = async (req, res) => {
     await user.save();
 
     authLog(`utilisateur créé : ${user._id}`);
+    logger.info('audit: inscription', { audit: true, userId: user._id.toString(), ip: req.ip });
 
     // Envoyer un email de bienvenue
     // await sendEmail(
@@ -82,7 +104,7 @@ exports.register = async (req, res) => {
     if (error.code === 11000) {
       return res.status(409).json({ message: 'Cet email ou ce nom d\'utilisateur est déjà utilisé.' });
     }
-    console.error('Erreur lors de l\'inscription', error);
+    logger.error('Erreur lors de l\'inscription', { error: error.message, stack: error.stack });
     res.status(500).json({ message: 'Une erreur est survenue.' });
   }
 };

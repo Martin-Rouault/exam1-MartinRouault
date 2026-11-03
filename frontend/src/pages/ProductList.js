@@ -3,6 +3,9 @@ import React, { useEffect, useState } from 'react';
 import { fetchProducts } from '../services/api';
 import { useCart } from '../context/CartContext';
 
+/**
+ * Page d'accueil : liste des produits récupérés depuis l'API et bouton d'ajout au panier.
+ */
 const ProductList = () => {
   const [products, setProducts] = useState([]);
   const { dispatch } = useCart();

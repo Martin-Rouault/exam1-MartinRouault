@@ -8,6 +8,12 @@ import {
   updateProductStock,
 } from "../services/adminApi";
 
+/**
+ * Page d'administration (rôle admin).
+ * - Gestion des commandes : liste, passage à « Expédiée » ou « En cours de traitement », détail en fenêtre modale.
+ * - Gestion des produits : mise à jour du stock (entier ≥ 0, 0 autorisé).
+ * Affiche un message si le chargement échoue (session expirée, accès refusé…).
+ */
 const Admin = () => {
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);

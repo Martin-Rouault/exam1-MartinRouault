@@ -1,5 +1,9 @@
 import { useCart } from '../context/CartContext';
 
+/**
+ * Choix du transporteur (Colissimo / Chronopost), stocké dans le contexte du panier.
+ * Les valeurs doivent correspondre à l'enum `shippingMethod` du modèle Order côté backend.
+ */
  const ShippingMethodSelection = () => {
   const { shippingMethod, dispatch } = useCart();
   const shippingOptions = [

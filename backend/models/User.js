@@ -2,6 +2,15 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
+/**
+ * Utilisateur de l'application.
+ *
+ * @typedef {Object} User
+ * @property {string} username - Identifiant de connexion, unique.
+ * @property {string} email - Adresse email, unique.
+ * @property {string} password - Hash bcrypt du mot de passe (jamais stocké en clair).
+ * @property {('user'|'admin')} role - Rôle, `user` par défaut.
+ */
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   email: { type: String, required: true, unique: true },

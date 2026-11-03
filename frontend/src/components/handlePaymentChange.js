@@ -1,5 +1,9 @@
 import { useCart } from '../context/CartContext';
 
+/**
+ * Choix du mode de paiement, stocké dans le contexte du panier.
+ * Les valeurs doivent correspondre à l'enum `paymentMethod` du modèle Order côté backend.
+ */
 const PaymentMethodSelection = () => {
   const { paymentMethod, dispatch } = useCart();
   const paymentOptions = [

@@ -4,10 +4,11 @@ const cors = require('cors');
 const helmet = require('helmet');
 require('dotenv').config();
 const connectDB = require('./config/db');
+const logger = require('./config/logger');
 
 // Refuse de démarrer sans secret JWT robuste (≥ 32 caractères)
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
-  console.error('JWT_SECRET absent ou trop court (32 caractères minimum). Arrêt du serveur.');
+  logger.error('JWT_SECRET absent ou trop court (32 caractères minimum). Arrêt du serveur.');
   process.exit(1);
 }
 
@@ -18,6 +19,9 @@ connectDB();
 if (process.env.TRUST_PROXY) {
   app.set('trust proxy', Number(process.env.TRUST_PROXY));
 }
+
+// Journalisation de chaque requête HTTP (méthode, URL, statut, durée, IP)
+app.use(logger.httpLogger);
 
 // En-têtes HTTP de sécurité (supprime aussi X-Powered-By)
 app.use(helmet());
@@ -47,9 +51,9 @@ app.use((err, req, res, next) => {
   if (err.type === 'entity.too.large') {
     return res.status(413).json({ message: 'Corps de requête trop volumineux.' });
   }
-  console.error('Erreur non gérée :', err);
+  logger.error('erreur non gérée', { error: err.message, stack: err.stack, url: req.originalUrl });
   res.status(500).json({ message: 'Erreur serveur.' });
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Serveur en écoute sur le port ${PORT}`));
+app.listen(PORT, () => logger.info('serveur démarré', { port: Number(PORT) }));

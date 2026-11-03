@@ -8,3 +8,5 @@ logs
 Dockerfile
 .dockerignore
 .git
+docs
+tests

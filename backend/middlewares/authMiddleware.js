@@ -1,11 +1,12 @@
 // backend/middlewares/authMiddleware.js
 const jwt = require('jsonwebtoken');
+const logger = require('../config/logger');
 
 /**
  * Vérifie le JWT transmis dans l'en-tête `Authorization: Bearer <token>`.
  * En cas de succès, le contenu du token ({ userId, role }) est placé dans `req.user`.
  *
- * @type {import('express').RequestHandler}
+ * @type {express.RequestHandler}
  */
 exports.authenticateToken = (req, res, next) => {
   const token = req.headers['authorization']?.split(' ')[1];
@@ -14,6 +15,7 @@ exports.authenticateToken = (req, res, next) => {
   // Algorithme imposé : refuse les tokens signés autrement (ex. "alg": "none")
   jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] }, (err, user) => {
     if (err) {
+      logger.warn('audit: token refusé', { audit: true, reason: err.name, ip: req.ip, url: req.originalUrl });
       return res.status(403).json({ message: 'Token invalide ou expiré.' });
     }
     req.user = user;
@@ -25,9 +27,12 @@ exports.authenticateToken = (req, res, next) => {
  * Autorise uniquement les utilisateurs ayant le rôle `admin`.
  * Doit être placé après `authenticateToken`.
  *
- * @type {import('express').RequestHandler}
+ * @type {express.RequestHandler}
  */
 exports.isAdmin = (req, res, next) => {
-  if (req.user?.role !== 'admin') return res.status(403).json({ message: 'Accès interdit' });
+  if (req.user?.role !== 'admin') {
+    logger.warn('audit: accès administrateur refusé', { audit: true, userId: req.user?.userId, url: req.originalUrl, method: req.method });
+    return res.status(403).json({ message: 'Accès interdit' });
+  }
   next();
 };

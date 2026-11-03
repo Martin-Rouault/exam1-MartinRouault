@@ -5,6 +5,9 @@ import PaymentMethodSelection from '../components/handlePaymentChange';
 import ShippingAddress from '../components/ShippingAddress';
 
 
+/**
+ * Étape livraison et paiement : adresse, transporteur et mode de paiement, puis synthèse de commande.
+ */
 const ShippingPayment = () => {
   const navigate = useNavigate();
   // Naviguer vers la page de commande

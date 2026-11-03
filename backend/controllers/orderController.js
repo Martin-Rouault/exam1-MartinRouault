@@ -4,22 +4,40 @@ const mongoose = require('mongoose');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 const User = require('../models/User');
+const logger = require('../config/logger');
 
 const GATEWAY_URL = process.env.GATEWAY_URL || 'http://localhost:8000';
 // Clé partagée exigée par les microservices (appels internes uniquement)
 const internalHeaders = { 'x-internal-token': process.env.INTERNAL_API_KEY || '' };
 
-// Remet en stock les quantités déjà décrémentées (annulation d'une commande ratée)
+/**
+ * Remet en stock les quantités déjà décrémentées quand une commande échoue en cours de création.
+ *
+ * @param {Array<{productId: string, quantity: number}>} decremented - Articles déjà réservés.
+ * @returns {Promise<void>}
+ */
 const rollbackStock = async (decremented) => {
   for (const { productId, quantity } of decremented) {
     try {
       await Product.updateOne({ _id: productId }, { $inc: { stock: quantity } });
     } catch (error) {
-      console.error(`Échec de la remise en stock du produit ${productId}`, error);
+      logger.error('échec de la remise en stock', { productId, quantity, error: error.message });
     }
   }
 };
 
+/**
+ * Crée une commande pour l'utilisateur connecté.
+ *
+ * Étapes : réservation atomique du stock de chaque article (`stock >= quantité`), lecture du prix
+ * en base (le prix envoyé par le client est ignoré), enregistrement de la commande, puis
+ * notification email non bloquante via le gateway. En cas d'échec, le stock est restauré.
+ *
+ * @route POST /api/orders
+ * @param {express.Request} req - `req.user.userId` (JWT) ; `req.body` validé par `createOrderSchema`.
+ * @param {express.Response} res - 201 `{ message, order }` ; 400 données invalides ; 404 produit introuvable ; 409 stock insuffisant.
+ * @returns {Promise<void>}
+ */
 exports.createOrder = async (req, res) => {
   const { items, shippingAddress, paymentMethod, shippingMethod } = req.body;
   const { userId } = req.user;
@@ -53,6 +71,7 @@ exports.createOrder = async (req, res) => {
 
       if (!updated) {
         await rollbackStock(decremented);
+        logger.warn('commande refusée : stock insuffisant ou produit introuvable', { productId, quantity, userId });
         const product = await Product.findById(productId).select('name');
         return product
           ? res.status(409).json({ message: `Stock insuffisant pour « ${product.name} ».` })
@@ -74,13 +93,13 @@ exports.createOrder = async (req, res) => {
       shippingMethod,
     }).save();
 
-    console.log('Commande sauvegardée :', savedOrder._id.toString());
+    logger.info('audit: commande créée', { audit: true, orderId: savedOrder._id.toString(), userId, total });
   } catch (error) {
     await rollbackStock(decremented);
     if (error.name === 'ValidationError') {
       return res.status(400).json({ message: 'Commande invalide : vérifiez l\'adresse, la livraison et le paiement.' });
     }
-    console.error('Erreur lors de la création de la commande', error);
+    logger.error('Erreur lors de la création de la commande', { error: error.message, stack: error.stack });
     return res.status(500).json({ message: 'Une erreur est survenue lors de la création de la commande.' });
   }
 
@@ -97,38 +116,63 @@ exports.createOrder = async (req, res) => {
       }, { headers: internalHeaders, timeout: 10000 });
     }
   } catch (error) {
-    console.error('Erreur lors de l\'envoi de la notification', error.message);
+    logger.error('échec de l\'envoi de la notification', { orderId: savedOrder._id.toString(), error: error.message });
   }
 
   res.status(201).json({ message: 'Commande créée avec succès', order: savedOrder });
 };
 
+/**
+ * Supprime une commande (administrateurs uniquement).
+ *
+ * @route DELETE /api/orders/:id
+ * @param {express.Request} req - `req.params.id` : identifiant de la commande.
+ * @param {express.Response} res - 200 supprimée ; 400 identifiant invalide ; 404 introuvable.
+ * @returns {Promise<void>}
+ */
 exports.deleteOrder = async (req, res) => {
   try {
     const order = await Order.findByIdAndDelete(req.params.id);
     if (!order) {
       return res.status(404).json({ message: 'Commande non trouvée.' });
     }
+    logger.info('audit: commande supprimée', { audit: true, orderId: order._id.toString(), by: req.user?.userId });
     res.status(200).json({ message: `Commande ${order._id} supprimée.` });
   } catch (error) {
     if (error.name === 'CastError') {
       return res.status(400).json({ message: 'Identifiant de commande invalide.' });
     }
-    console.error('Erreur lors de la suppression de la commande :', error);
+    logger.error('Erreur lors de la suppression de la commande :', { error: error.message, stack: error.stack });
     res.status(500).json({ message: 'Erreur serveur.' });
   }
 };
 
+/**
+ * Liste toutes les commandes (administrateurs uniquement).
+ *
+ * @route GET /api/orders
+ * @param {express.Request} req
+ * @param {express.Response} res - 200 tableau de commandes ; 500 erreur base de données.
+ * @returns {Promise<void>}
+ */
 exports.getOrders = async (req, res) => {
   try {
     const orders = await Order.find();
     res.status(200).json(orders);
   } catch (error) {
-    console.error('Erreur lors de la récupération des commandes :', error);
+    logger.error('Erreur lors de la récupération des commandes :', { error: error.message, stack: error.stack });
     res.status(500).json({ message: 'Erreur lors de la récupération des commandes.' });
   }
 };
 
+/**
+ * Valide une commande : passage au statut « En cours de traitement » (administrateurs uniquement).
+ *
+ * @route PUT /api/orders/:id/validate
+ * @param {express.Request} req - `req.params.id` : identifiant de la commande.
+ * @param {express.Response} res - 200 `{ message, order }` ; 400 identifiant invalide ; 404 introuvable.
+ * @returns {Promise<void>}
+ */
 exports.validateOrder = async (req, res) => {
   try {
     const order = await Order.findByIdAndUpdate(
@@ -139,16 +183,25 @@ exports.validateOrder = async (req, res) => {
     if (!order) {
       return res.status(404).json({ message: 'Commande non trouvée.' });
     }
+    logger.info('audit: commande validée', { audit: true, orderId: order._id.toString(), by: req.user?.userId });
     res.status(200).json({ message: `Commande ${order._id} validée avec succès.`, order });
   } catch (error) {
     if (error.name === 'CastError') {
       return res.status(400).json({ message: 'Identifiant de commande invalide.' });
     }
-    console.error('Erreur lors de la validation de la commande :', error);
+    logger.error('Erreur lors de la validation de la commande :', { error: error.message, stack: error.stack });
     res.status(500).json({ message: 'Erreur serveur.' });
   }
 };
 
+/**
+ * Change le statut d'une commande (administrateurs uniquement). Le statut doit appartenir à l'enum du modèle `Order`.
+ *
+ * @route PUT /api/orders/:orderId/status
+ * @param {express.Request} req - `req.params.orderId` ; `req.body.status`.
+ * @param {express.Response} res - 200 `{ message, order }` ; 400 statut ou identifiant invalide ; 404 introuvable.
+ * @returns {Promise<void>}
+ */
 exports.updateOrderStatus = async (req, res) => {
   const { orderId } = req.params;
   const { status } = req.body;
@@ -169,6 +222,7 @@ exports.updateOrderStatus = async (req, res) => {
       return res.status(404).json({ message: 'Commande non trouvée.' });
     }
 
+    logger.info('audit: statut de commande modifié', { audit: true, orderId, status, by: req.user?.userId });
     res.status(200).json({ message: 'Statut mis à jour avec succès', order });
   } catch (error) {
     if (error.name === 'ValidationError') {
@@ -178,7 +232,7 @@ exports.updateOrderStatus = async (req, res) => {
     if (error.name === 'CastError') {
       return res.status(400).json({ message: 'Identifiant de commande invalide.' });
     }
-    console.error('Erreur lors de la mise à jour de la commande :', error);
+    logger.error('Erreur lors de la mise à jour de la commande :', { error: error.message, stack: error.stack });
     res.status(500).json({ message: 'Erreur serveur.' });
   }
 };

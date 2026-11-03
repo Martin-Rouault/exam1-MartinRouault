@@ -2,6 +2,16 @@ import React, { createContext, useContext, useReducer } from "react";
 
 const CartContext = createContext();
 
+/**
+ * Reducer du panier (Context API).
+ * Actions : ADD_TO_CART, DECREMENT_QUANTITY (minimum 1), REMOVE_FROM_CART, CLEAR_CART,
+ * SET_SHIPPING_METHOD, SET_PAYMENT_METHOD, SET_SHIPPING_ADDRESS.
+ * Chaque action renvoie un nouvel état sans modifier l'ancien (immutabilité).
+ *
+ * @param {object} state - État courant { cart, shippingMethod, paymentMethod, shippingAddress }.
+ * @param {{type: string, payload?: any}} action - Action à appliquer.
+ * @returns {object} Nouvel état.
+ */
 export const cartReducer = (state, action) => {
   switch (action.type) {
     case "ADD_TO_CART":

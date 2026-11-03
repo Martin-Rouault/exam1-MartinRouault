@@ -4,6 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
 
+/**
+ * Page d'inscription (nom d'utilisateur, email, mot de passe de 8 caractères minimum).
+ * Les erreurs de validation renvoyées par l'API sont affichées à l'utilisateur.
+ */
 const Register = () => {
   const [formData, setFormData] = useState({
     username: '',

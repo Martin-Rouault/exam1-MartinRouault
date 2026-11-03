@@ -13,6 +13,9 @@ import AdminRoute from './components/AdminRoute';
 import ShippingPayment from './pages/ShippingPayment';
 
 // Layout principal avec Navbar et Outlet
+/**
+ * Gabarit commun à toutes les pages : barre de navigation + contenu de la route active (<Outlet />).
+ */
 const MainLayout = () => (
   <>
     <Navbar />

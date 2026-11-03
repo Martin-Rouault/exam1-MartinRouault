@@ -25,6 +25,29 @@ Chaque entrée du résumé renvoie à une fiche détaillée (avant / après / po
 - URL de l'API du frontend configurable (`REACT_APP_API_URL`) au lieu de `localhost:5000` codé en dur → [C-2](#c-2)
 - Le build de production du frontend cible l'API Render (`frontend/.env.production`) → [C-3](#c-3)
 
+#### Ajouté — CI/CD (E24)
+- Pipeline GitHub Actions : tests, audit, documentation, build et push des images, déploiement préprod / prod → [CI-1](#ci-1)
+
+#### Ajouté — Journalisation et audit (E25)
+- Winston sur les 4 services Node, journal des requêtes HTTP et journal d'audit → [LOG-1](#log-1)
+
+#### Ajouté — Documentation et tests (E29)
+- JSDoc sur le backend, génération HTML (`npm run docs`), commentaires des composants React, `README.md` → [DOC-1](#doc-1)
+- Tests unitaires `node --test` (validation, JWT, contrôle d'accès) → [DOC-2](#doc-2)
+
+#### Modifié — Emails
+- Serveur SMTP configurable : relais Brevo sur le port 2525 en production, Gmail en local → [C-4](#c-4)
+
+#### Sécurité (E28)
+- Prix et total de commande recalculés côté serveur → [SEC-1](#sec-1)
+- Contrôle d'accès : suppression de commande réservée aux administrateurs → [SEC-2](#sec-2)
+- Validation des entrées avec Joi (dont injection NoSQL au login) → [SEC-3](#sec-3)
+- Authentification : messages non discriminants, limitation des tentatives, JWT durci → [SEC-4](#sec-4)
+- Secrets retirés des logs → [SEC-5](#sec-5)
+- CORS restreint, en-têtes de sécurité (Helmet), corps limité, erreurs génériques → [SEC-6](#sec-6)
+- Microservices protégés par une clé interne, erreurs SMTP masquées → [SEC-7](#sec-7)
+- Dépendances : `jsonwebtoken` 9.0.3, compatible Node 25+ → [SEC-8](#sec-8)
+
 #### Corrigé — Backend (E27)
 - Crash du serveur quand MongoDB est indisponible → [B-1](#b-1)
 - `DELETE /api/orders/:id` ne répondait jamais et ne supprimait rien → [B-2](#b-2)
@@ -157,6 +180,127 @@ Chaque entrée du résumé renvoie à une fiche détaillée (avant / après / po
   - `frontend/Dockerfile` : `ARG REACT_APP_API_URL` sans valeur par défaut et sans `ENV`. Sans argument, c'est `.env.production` qui s'applique ; avec un argument (`docker-compose.yml` passe `http://localhost:5000/api`), l'argument est prioritaire.
 - **Ordre de priorité** (Create React App) : variable d'environnement déjà définie > `.env.production` > valeur par défaut de `src/config.js`. En développement (`npm start`), `.env.production` n'est pas lu et le front reste sur `localhost:5000`.
 - **Vérification** : build de production → le bundle contient `exam1-martinrouault-1.onrender.com/api` et plus aucune occurrence de `localhost:5000`.
+
+<a id="c-4"></a>
+#### C-4 — Serveur SMTP configurable
+- **Constat** : le microservice de notifications envoyait via Gmail (`service: 'gmail'`, ports 465 / 587). Render bloque en offre gratuite le trafic sortant sur les ports 25, 465 et 587 : aucun email ne pouvait partir de la production.
+- **Correction** (`microservices/notifications/index.js`, fonction `createTransporter`) :
+  - si `SMTP_HOST` est défini : serveur SMTP générique (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`). En production : relais Brevo `smtp-relay.brevo.com`, port **2525** (port alternatif proposé par Brevo, non bloqué par Render) ;
+  - sinon : Gmail avec mot de passe d'application, comme à l'origine (local, Docker Compose) ;
+  - expéditeur configurable avec `EMAIL_FROM` (adresse validée chez le fournisseur).
+- Variables ajoutées à `.env.example` et transmises par `docker-compose.yml`.
+
+### CI/CD (E24)
+
+<a id="ci-1"></a>
+#### CI-1 — Pipeline GitHub Actions (`.github/workflows/ci-cd.yml`)
+| Job | Déclencheur | Étapes |
+|---|---|---|
+| `backend` | push / pull request sur `main` et `develop` | `npm ci` → `npm test` → `npm audit --audit-level=high` (non bloquant) → `npm run docs` → documentation publiée en artefact |
+| `frontend` | idem | `npm ci` → build de production |
+| `services` | idem (matrice : gateway, notifications, stock) | `npm ci` → vérification de syntaxe |
+| `docker` | après les 3 jobs précédents | build des 5 images ; sur push : envoi vers `ghcr.io` (tags SHA du commit + nom de branche), cache de build GitHub Actions |
+| `deploy-preprod` | push sur `develop` | environnement GitHub `preproduction` : appel des Deploy Hooks Render, puis test de fumée sur `/health` |
+| `deploy-prod` | push sur `main` | environnement GitHub `production` (validation manuelle possible via « Required reviewers ») : Deploy Hooks + test de fumée |
+- Les pull requests exécutent la CI sans jamais déployer.
+- Scripts : `.github/scripts/render-deploy.sh` (les URL des hooks sont des secrets, jamais affichées) et `.github/scripts/smoke-test.sh` (attente du build Render et du réveil d'un service gratuit, 20 tentatives).
+- Configuration requise : secrets `RENDER_DEPLOY_HOOK_*` et variables `BACKEND_URL` / `FRONTEND_URL` dans chaque environnement GitHub ; Auto-Deploy désactivé sur Render.
+
+### Journalisation (E25)
+
+<a id="log-1"></a>
+#### LOG-1 — Winston et journal d'audit
+- **Fichiers** : `backend/config/logger.js`, `gateway/logger.js`, `microservices/notifications/logger.js`, `microservices/stock-management/logger.js`.
+- **Format** : JSON horodaté avec le nom du service et l'environnement, sur la sortie standard (collectée par Docker et par l'onglet Logs de Render). `LOG_TO_FILE=true` ajoute `logs/error.log` et `logs/combined.log` en local. Niveau réglable avec `LOG_LEVEL` (défaut `http`).
+- **Journal des requêtes** : middleware `httpLogger` sur les 4 services (méthode, URL sans paramètres, statut, durée, IP). Niveau `warn` pour les 4xx, `error` pour les 5xx. Ni en-têtes ni corps (ils peuvent contenir des secrets).
+- **Journal d'audit** (champ `audit: true`, filtrable) :
+  - connexion réussie / échouée (avec IP), inscription ;
+  - token refusé, accès administrateur refusé ;
+  - commande créée, validée, statut modifié, supprimée (avec l'auteur) ;
+  - stock modifié (avec l'auteur) ;
+  - appels refusés aux microservices (clé interne invalide).
+- Tous les `console.log` / `console.error` des services sont remplacés (hors script `seeder.js`, utilitaire en ligne de commande).
+
+### Documentation et tests (E29)
+
+<a id="doc-1"></a>
+#### DOC-1 — JSDoc et documentation générée
+- Commentaires JSDoc sur tous les contrôleurs (route, paramètres, codes de réponse), les middlewares, le logger, la connexion MongoDB et les modèles (`@typedef User`, `Product`, `Order`, `OrderItem`).
+- `backend/jsdoc.json` + script `npm run docs` → site HTML dans `backend/docs/` (ignoré par Git, publié comme artefact par la CI).
+- Commentaires d'en-tête sur tous les composants et pages React (rôle, données manipulées, règles métier).
+- `README.md` à la racine : architecture, lancement local (Docker ou non), scripts, variables, déploiement.
+- Scripts backend : `npm start` lance désormais `node server.js` (production) ; le rechargement automatique passe par `npm run dev` (nodemon).
+
+<a id="doc-2"></a>
+#### DOC-2 — Tests unitaires
+- `backend/tests/validation.test.js`, exécuté par `npm test` (runner natif `node:test`, sans dépendance supplémentaire ni base de données).
+- Couvre : injection NoSQL au login, mot de passe trop court, nom contenant du HTML / JavaScript, suppression du prix envoyé par le client, quantité et paiement invalides, enum des statuts, stock à 0, middleware `validate`, token absent ou `alg: none`, contrôle `isAdmin`.
+
+### Sécurité (E28)
+
+Toutes les vérifications ci-dessous ont été exécutées sur l'API réelle (`server.js` complet, base simulée).
+
+<a id="sec-1"></a>
+#### SEC-1 — Prix falsifiables
+- **Faille** : `createOrder` calculait le total à partir du `price` envoyé par le navigateur. En modifiant la requête, on pouvait commander un ordinateur à 0,01 €.
+- **Correction** : le prix est lu en base, dans le document renvoyé par le décrément atomique du stock (`updated.price`). Les champs `price` et `total` envoyés par le client sont supprimés par la validation Joi (`stripUnknown`).
+- **Vérification** : commande envoyée avec `price: 0.01` → commande enregistrée avec un total de 1000 €.
+
+<a id="sec-2"></a>
+#### SEC-2 — Contrôle d'accès sur `DELETE /api/orders/:id`
+- **Faille** : la route n'exigeait qu'un utilisateur connecté (`isAdmin` absent, contrairement au commentaire).
+- **Correction** : ajout de `isAdmin`. Revue des autres routes `PUT` / `DELETE` : toutes protégées par `authenticateToken` + `isAdmin`.
+- **Vérification** : suppression par un utilisateur non admin → 403.
+
+<a id="sec-3"></a>
+#### SEC-3 — Validation des entrées (Joi)
+- **Fichiers** : `middlewares/validate.js` (middleware générique), `validators/schemas.js` (schémas), appliqués dans `routes/*.js`.
+- **Règles** :
+  - inscription : nom alphanumérique de 3 à 30 caractères, email valide, mot de passe de 8 à 128 caractères ;
+  - commande : identifiants MongoDB valides, quantités entières de 1 à 100, adresse bornée, paiement et livraison limités aux valeurs de l'enum ;
+  - statut et stock : valeurs autorisées uniquement ;
+  - identifiants dans l'URL : ObjectId valides.
+- **Injection NoSQL** : `{"username": {"$ne": null}}` était transmis tel quel à `User.findOne`, qui renvoyait alors le premier utilisateur de la base. Joi impose désormais des chaînes de caractères. **Vérification** : 400 « Le nom d'utilisateur doit être une chaîne de caractères ».
+- **XSS (`<script>alert('test')</script>`)** : React échappe tout le contenu affiché et aucun `dangerouslySetInnerHTML` n'est utilisé (vérifié). Le nom d'utilisateur est en plus limité aux caractères alphanumériques et les emails sont envoyés en texte brut.
+
+<a id="sec-4"></a>
+#### SEC-4 — Authentification
+- **Énumération des comptes** : « Utilisateur non trouvé » et « Mot de passe incorrect » permettaient de savoir si un compte existait. La réponse est maintenant toujours 401 « Identifiants incorrects. ». **Vérification** : réponse identique pour un compte inexistant et pour un mauvais mot de passe.
+- **Force brute** : `express-rate-limit` sur `/api/auth/login` et `/api/auth/register` (20 requêtes par IP et par tranche de 15 minutes). `TRUST_PROXY=1` en production pour identifier l'IP réelle derrière le proxy Render. **Vérification** : la 21e requête reçoit 429.
+- **JWT** :
+  - algorithme `HS256` imposé à la signature et à la vérification. **Vérification** : un token `"alg": "none"` se présentant comme admin → 403 ;
+  - le serveur refuse de démarrer si `JWT_SECRET` est absent ou fait moins de 32 caractères. Le secret local (64 caractères hexadécimaux, 256 bits) est conforme ; un secret différent est utilisé en production.
+- **Reste à faire** : le token est stocké dans le `localStorage`. Le passage à un cookie `HttpOnly` nécessite que le front et l'API partagent un même domaine (sous-domaines `app.` / `api.`), ce qui dépend de E23.
+
+<a id="sec-5"></a>
+#### SEC-5 — Secrets dans les logs
+Supprimés :
+- `authMiddleware` : le token de chaque requête ;
+- `authController` : mot de passe en clair, document utilisateur complet (avec le hash), token ;
+- `config/db.js` : l'URI MongoDB, qui contient l'identifiant et le mot de passe Atlas ;
+- microservice notifications : l'adresse et le **mot de passe SMTP** affichés au démarrage, le contenu des emails ;
+- `frontend/src/services/api.js` : le token et la commande affichés dans la console du navigateur.
+
+Les options obsolètes `useNewUrlParser` / `useUnifiedTopology` ont aussi été retirées. **Vérification** : aucun token ni mot de passe dans les logs après une série de connexions et de commandes.
+
+<a id="sec-6"></a>
+#### SEC-6 — Configuration HTTP de l'API
+- **CORS** : `cors()` autorisait toutes les origines. La liste des origines autorisées est maintenant lue dans `CORS_ORIGIN`. **Vérification** : une origine autorisée reçoit `Access-Control-Allow-Origin`, une origine inconnue non.
+- **Helmet** : en-têtes `Content-Security-Policy`, `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`… ; suppression de `X-Powered-By` (également désactivé sur le gateway).
+- **Corps de requête** limité à 10 ko (413 au-delà).
+- **Gestionnaire d'erreurs** : réponse JSON générique, jamais de pile d'appels. **Vérification** : un JSON malformé renvoie 400 « Corps de requête JSON invalide. ».
+
+<a id="sec-7"></a>
+#### SEC-7 — Microservices
+- **Faille** : sur Render, chaque service a une URL publique. Sans authentification, n'importe qui pouvait appeler `/notify` et envoyer des emails avec le compte de l'application (relais de spam).
+- **Correction** : clé partagée `INTERNAL_API_KEY`, transmise par le backend dans l'en-tête `x-internal-token` et vérifiée par notifications et stock-management avec une comparaison à temps constant (`crypto.timingSafeEqual`). Sans clé configurée, toutes les requêtes sont refusées (401).
+- **Notifications** : validation de `to`, `subject` et `text` ; l'erreur Nodemailer complète n'est plus renvoyée au client (502 générique) ; `body-parser` remplacé par `express.json` avec une limite de taille.
+
+<a id="sec-8"></a>
+#### SEC-8 — Dépendances
+- `jsonwebtoken` 9.0.2 → 9.0.3 (`jws` 4 / `jwa` 2.0.1) : `jwa` utilise désormais `crypto.timingSafeEqual` et ne charge plus `buffer-equal-constant-time` au démarrage. **Vérification** : signature et vérification d'un JWT avec `SlowBuffer` supprimé (comportement de Node 25+) → OK. Le problème [ENV-1](#env-1) est donc corrigé dans le code.
+- Ajouts : `joi`, `helmet`, `express-rate-limit`.
+- `npm audit` : à compléter (le build Render signalait 10 vulnérabilités dans le backend avant mise à jour).
 
 ### Backend
 

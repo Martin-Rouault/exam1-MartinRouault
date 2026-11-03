@@ -3,6 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { createOrder } from "../services/api";
 
+/**
+ * Page de synthèse et de confirmation de commande.
+ * Vérifie côté client que le panier, l'adresse et les modes de livraison / paiement sont renseignés,
+ * puis envoie la commande à l'API. Le total définitif est recalculé par le serveur à partir des prix en base.
+ */
 const Order = () => {
   const navigate = useNavigate();
   //recuperer le context panier

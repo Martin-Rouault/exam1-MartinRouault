@@ -1,0 +1,178 @@
+# Pipeline CI/CD — exam1
+#
+#   develop ──► tests + build + images ──► déploiement PRÉPRODUCTION (Render)
+#   main    ──► tests + build + images ──► déploiement PRODUCTION (Render, validation manuelle possible)
+#   pull request ──► tests + build uniquement (aucun déploiement)
+#
+# Secrets à créer dans GitHub (Settings ▸ Environments ▸ preproduction / production ▸ Secrets) :
+#   RENDER_DEPLOY_HOOK_BACKEND, RENDER_DEPLOY_HOOK_FRONTEND, RENDER_DEPLOY_HOOK_GATEWAY,
+#   RENDER_DEPLOY_HOOK_NOTIFICATIONS, RENDER_DEPLOY_HOOK_STOCK  (Render ▸ service ▸ Settings ▸ Deploy Hook)
+# Variable d'environnement GitHub (même endroit, onglet Variables) :
+#   BACKEND_URL  (ex. https://exam1-martinrouault-1.onrender.com) pour le test de fumée après déploiement
+# Sur Render, désactiver l'Auto-Deploy des services : c'est ce pipeline qui déclenche les déploiements.
+
+name: CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------- CI : backend
+  backend:
+    name: Backend — installation, tests, audit, documentation
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Installation (reproductible, depuis package-lock.json)
+        run: npm ci
+      - name: Tests unitaires
+        run: npm test
+      - name: Audit de sécurité des dépendances de production
+        run: npm audit --omit=dev --audit-level=high
+        continue-on-error: true # signalé dans le résumé sans bloquer le pipeline
+      - name: Génération de la documentation JSDoc
+        run: npm run docs
+      - uses: actions/upload-artifact@v6
+        with:
+          name: documentation-backend
+          path: backend/docs
+          retention-days: 30
+
+  # ---------------------------------------------------------------- CI : frontend
+  frontend:
+    name: Frontend — installation et build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Build de production
+        run: npm run build
+        env:
+          CI: false # Create React App traiterait les avertissements ESLint comme des erreurs
+
+  # ---------------------------------------------------------------- CI : gateway + microservices
+  services:
+    name: ${{ matrix.service }} — installation et vérification
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [gateway, microservices/notifications, microservices/stock-management]
+    defaults:
+      run:
+        working-directory: ${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - run: npm ci
+      - name: Vérification de la syntaxe
+        run: for f in $(find . -name '*.js' -not -path './node_modules/*'); do node --check "$f"; done
+
+  # ---------------------------------------------------------------- Build + push des images Docker
+  docker:
+    name: Image Docker — ${{ matrix.name }}
+    needs: [backend, frontend, services]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # push vers GitHub Container Registry (ghcr.io)
+    strategy:
+      matrix:
+        include:
+          - { name: backend, context: backend }
+          - { name: frontend, context: frontend }
+          - { name: gateway, context: gateway }
+          - { name: notifications, context: microservices/notifications }
+          - { name: stock-management, context: microservices/stock-management }
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v4
+      - name: Connexion à ghcr.io
+        if: github.event_name == 'push'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build (et push sur les branches main / develop)
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          push: ${{ github.event_name == 'push' }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/exam1-${{ matrix.name }}:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/exam1-${{ matrix.name }}:${{ github.ref_name }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  # ---------------------------------------------------------------- CD : préproduction
+  deploy-preprod:
+    name: Déploiement préproduction
+    needs: docker
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    environment:
+      name: preproduction
+      url: ${{ vars.FRONTEND_URL }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Déclenchement des déploiements Render
+        env:
+          HOOK_BACKEND: ${{ secrets.RENDER_DEPLOY_HOOK_BACKEND }}
+          HOOK_FRONTEND: ${{ secrets.RENDER_DEPLOY_HOOK_FRONTEND }}
+          HOOK_GATEWAY: ${{ secrets.RENDER_DEPLOY_HOOK_GATEWAY }}
+          HOOK_NOTIFICATIONS: ${{ secrets.RENDER_DEPLOY_HOOK_NOTIFICATIONS }}
+          HOOK_STOCK: ${{ secrets.RENDER_DEPLOY_HOOK_STOCK }}
+        run: bash .github/scripts/render-deploy.sh
+      - name: Test de fumée (/health)
+        run: bash .github/scripts/smoke-test.sh "${{ vars.BACKEND_URL }}"
+
+  # ---------------------------------------------------------------- CD : production
+  deploy-prod:
+    name: Déploiement production
+    needs: docker
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: production # ajouter un « Required reviewer » dans GitHub pour imposer une validation manuelle
+      url: ${{ vars.FRONTEND_URL }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Déclenchement des déploiements Render
+        env:
+          HOOK_BACKEND: ${{ secrets.RENDER_DEPLOY_HOOK_BACKEND }}
+          HOOK_FRONTEND: ${{ secrets.RENDER_DEPLOY_HOOK_FRONTEND }}
+          HOOK_GATEWAY: ${{ secrets.RENDER_DEPLOY_HOOK_GATEWAY }}
+          HOOK_NOTIFICATIONS: ${{ secrets.RENDER_DEPLOY_HOOK_NOTIFICATIONS }}
+          HOOK_STOCK: ${{ secrets.RENDER_DEPLOY_HOOK_STOCK }}
+        run: bash .github/scripts/render-deploy.sh
+      - name: Test de fumée (/health)
+        run: bash .github/scripts/smoke-test.sh "${{ vars.BACKEND_URL }}"

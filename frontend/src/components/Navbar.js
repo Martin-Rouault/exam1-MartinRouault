@@ -3,6 +3,11 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 
+/**
+ * Barre de navigation.
+ * Affiche le nombre d'articles du panier, le nom de l'utilisateur connecté et les liens
+ * connexion / inscription ou le bouton de déconnexion (qui efface token, nom et rôle du localStorage).
+ */
 const Navbar = () => {
   const navigate = useNavigate();
   const { cart } = useCart();

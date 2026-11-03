@@ -2,6 +2,10 @@ import React from 'react';
 import { useCart } from '../context/CartContext';
 import { useNavigate } from 'react-router-dom';
 
+/**
+ * Page panier : modification des quantités, retrait d'un article, vidage du panier,
+ * puis passage à l'étape livraison / paiement.
+ */
 const Cart = () => {
   const { cart, dispatch } = useCart();
   const navigate = useNavigate();

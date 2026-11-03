@@ -29,3 +29,7 @@ data/db/
 
 # Autre
 .DS_Store
+# Documentation générée (npm run docs)
+backend/docs/
+# Logs locaux (LOG_TO_FILE=true)
+logs/

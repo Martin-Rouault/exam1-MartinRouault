@@ -1,6 +1,7 @@
 // config/db.js
 const mongoose = require('mongoose');
 require('dotenv').config();
+const logger = require('./logger');
 
 /**
  * Ouvre la connexion MongoDB à partir de MONGO_URI. Arrête le processus en cas d'échec.
@@ -11,9 +12,9 @@ require('dotenv').config();
 const connectDB = async () => {
     try {
         await mongoose.connect(process.env.MONGO_URI);
-        console.log('MongoDB connecté');
+        logger.info('MongoDB connecté', { database: mongoose.connection.name });
     } catch (err) {
-        console.error('Connexion MongoDB impossible :', err.message);
+        logger.error('connexion MongoDB impossible', { error: err.message });
         process.exit(1);
     }
 };
