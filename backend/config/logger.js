@@ -12,11 +12,7 @@ const { createLogger, format, transports } = require('winston');
  */
 const logger = createLogger({
   level: process.env.LOG_LEVEL || 'http',
-  format: format.combine(
-    format.timestamp(),
-    format.errors({ stack: true }),
-    format.json()
-  ),
+  format: format.combine(format.timestamp(), format.errors({ stack: true }), format.json()),
   defaultMeta: { service: 'backend', env: process.env.NODE_ENV || 'development' },
   transports: [new transports.Console()],
 });

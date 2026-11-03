@@ -28,6 +28,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ---------------------------------------------------------------- CI : qualité du code
+  lint:
+    name: Qualité du code — ESLint et Prettier
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: ESLint (bloquant sur les erreurs, les avertissements sont affichés)
+        run: npm run lint
+      - name: Prettier (vérification de la mise en forme)
+        run: npm run format:check
+        continue-on-error: true
+
   # ---------------------------------------------------------------- CI : backend
   backend:
     name: Backend — installation, tests, audit, documentation
@@ -99,7 +117,7 @@ jobs:
   # ---------------------------------------------------------------- Build + push des images Docker
   docker:
     name: Image Docker — ${{ matrix.name }}
-    needs: [backend, frontend, services]
+    needs: [lint, backend, frontend, services]
     runs-on: ubuntu-latest
     permissions:
       contents: read

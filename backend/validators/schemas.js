@@ -39,15 +39,26 @@ exports.createOrderSchema = Joi.object({
   shippingAddress: Joi.object({
     street: Joi.string().trim().max(200).required().label('La rue'),
     city: Joi.string().trim().max(100).required().label('La ville'),
-    postalCode: Joi.string().trim().pattern(/^[0-9A-Za-z -]{3,10}$/).required().label('Le code postal'),
+    postalCode: Joi.string()
+      .trim()
+      .pattern(/^[0-9A-Za-z -]{3,10}$/)
+      .required()
+      .label('Le code postal'),
     country: Joi.string().trim().max(100).required().label('Le pays'),
   }).required(),
-  paymentMethod: Joi.string().valid(...Order.schema.path('paymentMethod').enumValues).required(),
-  shippingMethod: Joi.string().valid(...Order.schema.path('shippingMethod').enumValues).required(),
+  paymentMethod: Joi.string()
+    .valid(...Order.schema.path('paymentMethod').enumValues)
+    .required(),
+  shippingMethod: Joi.string()
+    .valid(...Order.schema.path('shippingMethod').enumValues)
+    .required(),
 }).messages(messages);
 
 exports.orderStatusSchema = Joi.object({
-  status: Joi.string().valid(...Order.schema.path('status').enumValues).required().label('Le statut'),
+  status: Joi.string()
+    .valid(...Order.schema.path('status').enumValues)
+    .required()
+    .label('Le statut'),
 }).messages(messages);
 
 exports.stockSchema = Joi.object({

@@ -10,13 +10,13 @@ const logger = require('./logger');
  * @returns {Promise<void>}
  */
 const connectDB = async () => {
-    try {
-        await mongoose.connect(process.env.MONGO_URI);
-        logger.info('MongoDB connecté', { database: mongoose.connection.name });
-    } catch (err) {
-        logger.error('connexion MongoDB impossible', { error: err.message });
-        process.exit(1);
-    }
+  try {
+    await mongoose.connect(process.env.MONGO_URI);
+    logger.info('MongoDB connecté', { database: mongoose.connection.name });
+  } catch (err) {
+    logger.error('connexion MongoDB impossible', { error: err.message });
+    process.exit(1);
+  }
 };
 
 module.exports = connectDB;

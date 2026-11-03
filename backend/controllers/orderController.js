@@ -45,7 +45,7 @@ exports.createOrder = async (req, res) => {
   // Vérification du format des données
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({
-      message: 'Le corps de la requête doit contenir un tableau d\'objets { productId, quantity }.',
+      message: "Le corps de la requête doit contenir un tableau d'objets { productId, quantity }.",
     });
   }
   const invalidItem = items.find(
@@ -71,7 +71,11 @@ exports.createOrder = async (req, res) => {
 
       if (!updated) {
         await rollbackStock(decremented);
-        logger.warn('commande refusée : stock insuffisant ou produit introuvable', { productId, quantity, userId });
+        logger.warn('commande refusée : stock insuffisant ou produit introuvable', {
+          productId,
+          quantity,
+          userId,
+        });
         const product = await Product.findById(productId).select('name');
         return product
           ? res.status(409).json({ message: `Stock insuffisant pour « ${product.name} ».` })
@@ -93,30 +97,49 @@ exports.createOrder = async (req, res) => {
       shippingMethod,
     }).save();
 
-    logger.info('audit: commande créée', { audit: true, orderId: savedOrder._id.toString(), userId, total });
+    logger.info('audit: commande créée', {
+      audit: true,
+      orderId: savedOrder._id.toString(),
+      userId,
+      total,
+    });
   } catch (error) {
     await rollbackStock(decremented);
     if (error.name === 'ValidationError') {
-      return res.status(400).json({ message: 'Commande invalide : vérifiez l\'adresse, la livraison et le paiement.' });
+      return res
+        .status(400)
+        .json({ message: "Commande invalide : vérifiez l'adresse, la livraison et le paiement." });
     }
-    logger.error('Erreur lors de la création de la commande', { error: error.message, stack: error.stack });
-    return res.status(500).json({ message: 'Une erreur est survenue lors de la création de la commande.' });
+    logger.error('Erreur lors de la création de la commande', {
+      error: error.message,
+      stack: error.stack,
+    });
+    return res
+      .status(500)
+      .json({ message: 'Une erreur est survenue lors de la création de la commande.' });
   }
 
   // Notification du client (non bloquante : la commande est déjà enregistrée)
   try {
     const user = await User.findById(userId).select('email');
     if (user?.email) {
-      await axios.post(`${GATEWAY_URL}/notify`, {
-        to: user.email,
-        subject: 'Nouvelle Commande Créée',
-        text: `Une commande a été créée avec succès pour les produits suivants : \n${savedOrder.items
-          .map((item) => `Produit ID : ${item.productId}, Quantité : ${item.quantity}`)
-          .join('\n')}`,
-      }, { headers: internalHeaders, timeout: 10000 });
+      await axios.post(
+        `${GATEWAY_URL}/notify`,
+        {
+          to: user.email,
+          subject: 'Nouvelle Commande Créée',
+          text: `Une commande a été créée avec succès pour les produits suivants : \n${savedOrder.items
+            .map((item) => `Produit ID : ${item.productId}, Quantité : ${item.quantity}`)
+            .join('\n')}`,
+        },
+        { headers: internalHeaders, timeout: 10000 }
+      );
     }
   } catch (error) {
-    logger.error('échec de l\'envoi de la notification', { orderId: savedOrder._id.toString(), error: error.message });
+    logger.error("échec de l'envoi de la notification", {
+      orderId: savedOrder._id.toString(),
+      error: error.message,
+    });
   }
 
   res.status(201).json({ message: 'Commande créée avec succès', order: savedOrder });
@@ -136,13 +159,20 @@ exports.deleteOrder = async (req, res) => {
     if (!order) {
       return res.status(404).json({ message: 'Commande non trouvée.' });
     }
-    logger.info('audit: commande supprimée', { audit: true, orderId: order._id.toString(), by: req.user?.userId });
+    logger.info('audit: commande supprimée', {
+      audit: true,
+      orderId: order._id.toString(),
+      by: req.user?.userId,
+    });
     res.status(200).json({ message: `Commande ${order._id} supprimée.` });
   } catch (error) {
     if (error.name === 'CastError') {
       return res.status(400).json({ message: 'Identifiant de commande invalide.' });
     }
-    logger.error('Erreur lors de la suppression de la commande :', { error: error.message, stack: error.stack });
+    logger.error('Erreur lors de la suppression de la commande :', {
+      error: error.message,
+      stack: error.stack,
+    });
     res.status(500).json({ message: 'Erreur serveur.' });
   }
 };
@@ -160,7 +190,10 @@ exports.getOrders = async (req, res) => {
     const orders = await Order.find();
     res.status(200).json(orders);
   } catch (error) {
-    logger.error('Erreur lors de la récupération des commandes :', { error: error.message, stack: error.stack });
+    logger.error('Erreur lors de la récupération des commandes :', {
+      error: error.message,
+      stack: error.stack,
+    });
     res.status(500).json({ message: 'Erreur lors de la récupération des commandes.' });
   }
 };
@@ -183,13 +216,20 @@ exports.validateOrder = async (req, res) => {
     if (!order) {
       return res.status(404).json({ message: 'Commande non trouvée.' });
     }
-    logger.info('audit: commande validée', { audit: true, orderId: order._id.toString(), by: req.user?.userId });
+    logger.info('audit: commande validée', {
+      audit: true,
+      orderId: order._id.toString(),
+      by: req.user?.userId,
+    });
     res.status(200).json({ message: `Commande ${order._id} validée avec succès.`, order });
   } catch (error) {
     if (error.name === 'CastError') {
       return res.status(400).json({ message: 'Identifiant de commande invalide.' });
     }
-    logger.error('Erreur lors de la validation de la commande :', { error: error.message, stack: error.stack });
+    logger.error('Erreur lors de la validation de la commande :', {
+      error: error.message,
+      stack: error.stack,
+    });
     res.status(500).json({ message: 'Erreur serveur.' });
   }
 };
@@ -222,7 +262,12 @@ exports.updateOrderStatus = async (req, res) => {
       return res.status(404).json({ message: 'Commande non trouvée.' });
     }
 
-    logger.info('audit: statut de commande modifié', { audit: true, orderId, status, by: req.user?.userId });
+    logger.info('audit: statut de commande modifié', {
+      audit: true,
+      orderId,
+      status,
+      by: req.user?.userId,
+    });
     res.status(200).json({ message: 'Statut mis à jour avec succès', order });
   } catch (error) {
     if (error.name === 'ValidationError') {
@@ -232,7 +277,10 @@ exports.updateOrderStatus = async (req, res) => {
     if (error.name === 'CastError') {
       return res.status(400).json({ message: 'Identifiant de commande invalide.' });
     }
-    logger.error('Erreur lors de la mise à jour de la commande :', { error: error.message, stack: error.stack });
+    logger.error('Erreur lors de la mise à jour de la commande :', {
+      error: error.message,
+      stack: error.stack,
+    });
     res.status(500).json({ message: 'Erreur serveur.' });
   }
 };

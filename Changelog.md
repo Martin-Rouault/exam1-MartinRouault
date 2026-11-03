@@ -31,6 +31,12 @@ Chaque entrée du résumé renvoie à une fiche détaillée (avant / après / po
 #### Ajouté — Journalisation et audit (E25)
 - Winston sur les 4 services Node, journal des requêtes HTTP et journal d'audit → [LOG-1](#log-1)
 
+#### Ajouté — Qualité du code
+- ESLint (flat config) et Prettier à la racine, scripts `lint` / `format`, vérification dans la CI → [QUAL-1](#qual-1)
+
+#### Modifié — Dépendances
+- Mise à jour et audit des dépendances de tout le projet, suppression de `body-parser` inutilisé → [DEP-1](#dep-1)
+
 #### Ajouté — Documentation et tests (E29)
 - JSDoc sur le backend, génération HTML (`npm run docs`), commentaires des composants React, `README.md` → [DOC-1](#doc-1)
 - Tests unitaires `node --test` (validation, JWT, contrôle d'accès) → [DOC-2](#doc-2)
@@ -192,6 +198,8 @@ Chaque entrée du résumé renvoie à une fiche détaillée (avant / après / po
   - sinon : Gmail avec mot de passe d'application, comme à l'origine (local, Docker Compose) ;
   - expéditeur configurable avec `EMAIL_FROM` (adresse validée chez le fournisseur).
 - Variables ajoutées à `.env.example` et transmises par `docker-compose.yml`.
+- **Mise en production** : chaîne vérifiée avec les logs Winston (backend → gateway → notifications). Premier envoi refusé par Brevo avec `Invalid login: 525 5.7.1 Unauthorized IP address` : Brevo bloque par défaut les connexions SMTP depuis une IP inconnue. Correction : autorisation des adresses IP du serveur dans Brevo (Sécurité ▸ IP autorisées). Envoi de l'email « Nouvelle Commande Créée » vérifié.
+- **Délivrabilité** : l'expéditeur `@gmail.com` est vérifié, mais son domaine n'est pas authentifié (DKIM / DMARC) chez Brevo. Amélioration prévue : expéditeur sur un domaine propre authentifié (E23).
 
 <a id="g-1"></a>
 #### G-1 — Gateway : crash si un microservice n'est pas configuré
@@ -205,10 +213,11 @@ Chaque entrée du résumé renvoie à une fiche détaillée (avant / après / po
 #### CI-1 — Pipeline GitHub Actions (`.github/workflows/ci-cd.yml`)
 | Job | Déclencheur | Étapes |
 |---|---|---|
+| `lint` | push / pull request sur `main` et `develop` | `npm ci` (racine) → ESLint (bloquant sur les erreurs) → Prettier `--check` (non bloquant) |
 | `backend` | push / pull request sur `main` et `develop` | `npm ci` → `npm test` → `npm audit --audit-level=high` (non bloquant) → `npm run docs` → documentation publiée en artefact |
 | `frontend` | idem | `npm ci` → build de production |
 | `services` | idem (matrice : gateway, notifications, stock) | `npm ci` → vérification de syntaxe |
-| `docker` | après les 3 jobs précédents | build des 5 images ; sur push : envoi vers `ghcr.io` (tags SHA du commit + nom de branche), cache de build GitHub Actions |
+| `docker` | après les 4 jobs précédents | build des 5 images ; sur push : envoi vers `ghcr.io` (tags SHA du commit + nom de branche), cache de build GitHub Actions |
 | `deploy-preprod` | push sur `develop` | environnement GitHub `preproduction` : appel des Deploy Hooks Render, puis test de fumée sur `/health` |
 | `deploy-prod` | push sur `main` | environnement GitHub `production` (validation manuelle possible via « Required reviewers ») : Deploy Hooks + test de fumée |
 - Les pull requests exécutent la CI sans jamais déployer.
@@ -230,6 +239,30 @@ Chaque entrée du résumé renvoie à une fiche détaillée (avant / après / po
   - stock modifié (avec l'auteur) ;
   - appels refusés aux microservices (clé interne invalide).
 - Tous les `console.log` / `console.error` des services sont remplacés (hors script `seeder.js`, utilitaire en ligne de commande).
+
+### Qualité du code
+
+<a id="qual-1"></a>
+#### QUAL-1 — ESLint et Prettier
+- **Fichiers** : `eslint.config.js`, `.prettierrc.json`, `.prettierignore`, scripts dans le `package.json` racine (`npm run lint`, `lint:fix`, `format`, `format:check`).
+- **ESLint** (backend, gateway, microservices ; le frontend conserve la configuration ESLint de Create React App) :
+  - règles recommandées (`@eslint/js`), environnement Node.js ;
+  - `eqeqeq` (comparaisons strictes) en erreur ;
+  - `no-console` en avertissement (les logs doivent passer par Winston) ;
+  - `no-unused-vars` en avertissement, en tolérant `req`, `res`, `next` ;
+  - `eslint-config-prettier` pour éviter les conflits avec Prettier.
+- **Prettier** : apostrophes simples, point-virgule, 100 caractères par ligne, fins de ligne LF ; les fichiers Markdown sont exclus (tableaux mis en forme manuellement).
+- **Correction associée** : import `axios` inutilisé supprimé de `authController.js`.
+- **CI** : job `lint` exécuté avant la construction des images (voir [CI-1](#ci-1)).
+
+### Dépendances
+
+<a id="dep-1"></a>
+#### DEP-1 — Mise à jour et audit
+- `body-parser` supprimé du microservice de notifications : Express intègre `express.json()` depuis la version 4.16, et le module n'est plus importé.
+- `npm update` (mises à jour compatibles avec les plages de version déclarées) puis `npm audit --omit=dev` dans chaque partie du projet.
+- Résultats : `[à compléter avec la sortie de npm audit]`.
+- Mises à jour majeures non appliquées pendant l'examen (risque de régression) et proposées : Express 5, dernière version majeure de Mongoose, remplacement de Create React App (non maintenu) par Vite.
 
 ### Documentation et tests (E29)
 

@@ -69,9 +69,14 @@ app.post('/notify', requireInternalToken, async (req, res) => {
   const { to, subject, text } = req.body || {};
 
   if (
-    typeof to !== 'string' || !EMAIL_REGEX.test(to) ||
-    typeof subject !== 'string' || subject.length === 0 || subject.length > 200 ||
-    typeof text !== 'string' || text.length === 0 || text.length > 10000
+    typeof to !== 'string' ||
+    !EMAIL_REGEX.test(to) ||
+    typeof subject !== 'string' ||
+    subject.length === 0 ||
+    subject.length > 200 ||
+    typeof text !== 'string' ||
+    text.length === 0 ||
+    text.length > 10000
   ) {
     return res.status(400).json({ message: 'Paramètres de notification invalides.' });
   }
@@ -83,8 +88,8 @@ app.post('/notify', requireInternalToken, async (req, res) => {
     return res.status(200).json({ message: 'Email envoyé avec succès.' });
   } catch (error) {
     // Le détail de l'erreur reste dans les logs du service, jamais dans la réponse
-    logger.error('échec de l\'envoi de l\'email', { subject, error: error.message });
-    return res.status(502).json({ message: 'Erreur lors de l\'envoi de l\'email.' });
+    logger.error("échec de l'envoi de l'email", { subject, error: error.message });
+    return res.status(502).json({ message: "Erreur lors de l'envoi de l'email." });
   }
 });
 
@@ -92,11 +97,16 @@ app.post('/notify', requireInternalToken, async (req, res) => {
 app.get('/health', (req, res) => res.json({ status: 'ok', service: 'notifications' }));
 
 if (!process.env.INTERNAL_API_KEY) {
-  logger.warn('INTERNAL_API_KEY non définie : toutes les demandes de notification seront refusées.');
+  logger.warn(
+    'INTERNAL_API_KEY non définie : toutes les demandes de notification seront refusées.'
+  );
 }
 
 // Lancer le service Notification (PORT est injecté par l'hébergeur)
 const PORT = process.env.PORT || process.env.NOTIFI_PORT || 4002;
 app.listen(PORT, () => {
-  logger.info('service de notification démarré', { port: Number(PORT), smtp: process.env.SMTP_HOST ? 'smtp' : 'gmail' });
+  logger.info('service de notification démarré', {
+    port: Number(PORT),
+    smtp: process.env.SMTP_HOST ? 'smtp' : 'gmail',
+  });
 });

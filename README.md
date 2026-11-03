@@ -46,6 +46,13 @@ cd frontend && npm install && npm start       # front
 | `npm test` | Tests unitaires (`node --test`) : validation des entrées, JWT, contrôle d'accès |
 | `npm run docs` | Génère la documentation JSDoc dans `backend/docs/` |
 
+## Qualité du code (racine du projet)
+
+| Commande | Effet |
+|---|---|
+| `npm run lint` / `npm run lint:fix` | ESLint sur le backend, le gateway et les microservices |
+| `npm run format` / `npm run format:check` | Mise en forme Prettier |
+
 ## Variables d'environnement
 
 Toutes les variables sont décrites dans [`.env.example`](.env.example). Les secrets ne sont jamais versionnés

@@ -10,13 +10,16 @@ const mongoose = require('mongoose');
  * @property {string} description - Description.
  * @property {number} stock - Quantité disponible, décrémentée à chaque commande.
  */
-const productSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  price: { type: Number, required: true },
-  description: { type: String, required: true },
-  stock: { type: Number, required: true },
-}, {
-  timestamps: true, // Ajoute createdAt et updatedAt
-});
+const productSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true },
+    price: { type: Number, required: true },
+    description: { type: String, required: true },
+    stock: { type: Number, required: true },
+  },
+  {
+    timestamps: true, // Ajoute createdAt et updatedAt
+  }
+);
 
 module.exports = mongoose.model('Product', productSchema);

@@ -38,8 +38,8 @@ const Register = () => {
         alert(message); // Affiche un message à l'utilisateur (vous pouvez remplacer par un toast)
       } else {
         // Erreur réseau ou autre
-        console.error("Erreur réseau ou serveur", err);
-        alert("Une erreur est survenue. Veuillez réessayer.");
+        console.error('Erreur réseau ou serveur', err);
+        alert('Une erreur est survenue. Veuillez réessayer.');
       }
       //setError('Une erreur est survenue lors de la création du compte.');
     }
@@ -77,7 +77,9 @@ const Register = () => {
           className="border border-gray-300 p-2 w-full mb-4"
           required
         />
-        <button type="submit" className="bg-blue-500 text-white p-2 w-full rounded">S'inscrire</button>
+        <button type="submit" className="bg-blue-500 text-white p-2 w-full rounded">
+          S'inscrire
+        </button>
       </form>
     </div>
   );

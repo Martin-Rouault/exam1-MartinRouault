@@ -1,12 +1,12 @@
 // src/pages/Admin.js
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from 'react';
 import {
   getOrders,
   updateOrderStatus,
   // validateOrder,
   getProducts,
   updateProductStock,
-} from "../services/adminApi";
+} from '../services/adminApi';
 
 /**
  * Page d'administration (rôle admin).
@@ -22,24 +22,21 @@ const Admin = () => {
   const [newStock, setNewStock] = useState({}); // Stock temporaire par produit
   const [updatingStock, setUpdatingStock] = useState(null); // Stock en cours de mise à jour
 
-  const [loadError, setLoadError] = useState("");
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [ordersResponse, productsResponse] = await Promise.all([
-          getOrders(),
-          getProducts(),
-        ]);
+        const [ordersResponse, productsResponse] = await Promise.all([getOrders(), getProducts()]);
         setOrders(ordersResponse.data);
         setProducts(productsResponse.data);
       } catch (error) {
-        console.error("Erreur lors du chargement des données admin :", error);
+        console.error('Erreur lors du chargement des données admin :', error);
         const status = error.response?.status;
         setLoadError(
           status === 401 || status === 403
-            ? "Session expirée ou accès refusé. Veuillez vous reconnecter."
-            : "Impossible de charger les données. Veuillez réessayer."
+            ? 'Session expirée ou accès refusé. Veuillez vous reconnecter.'
+            : 'Impossible de charger les données. Veuillez réessayer.'
         );
       }
     };
@@ -54,14 +51,12 @@ const Admin = () => {
 
       // Mettre à jour l'état local après une mise à jour réussie
       setOrders((prevOrders) =>
-        prevOrders.map((order) =>
-          order._id === orderId ? { ...order, status: newStatus } : order
-        )
+        prevOrders.map((order) => (order._id === orderId ? { ...order, status: newStatus } : order))
       );
 
       alert(`Statut de la commande ${orderId} mis à jour en "${newStatus}".`);
     } catch (error) {
-      alert("Erreur lors de la mise à jour du statut de la commande.");
+      alert('Erreur lors de la mise à jour du statut de la commande.');
     }
     setLoadingOrder(null); // Désactive le loader
   };
@@ -76,8 +71,13 @@ const Admin = () => {
     const stockValue = Number(rawValue);
 
     // 0 est une valeur valide (rupture de stock) : on teste le champ vide, pas la "falsiness"
-    if (rawValue === undefined || rawValue === "" || !Number.isInteger(stockValue) || stockValue < 0) {
-      alert("Veuillez entrer une quantité de stock valide.");
+    if (
+      rawValue === undefined ||
+      rawValue === '' ||
+      !Number.isInteger(stockValue) ||
+      stockValue < 0
+    ) {
+      alert('Veuillez entrer une quantité de stock valide.');
       return;
     }
 
@@ -93,10 +93,10 @@ const Admin = () => {
       setProducts(updatedProducts);
 
       // Réinitialisation du champ
-      setNewStock({ ...newStock, [productId]: "" });
+      setNewStock({ ...newStock, [productId]: '' });
     } catch (error) {
-      console.error("Erreur lors de la mise à jour du stock :", error);
-      alert(error.response?.data?.message || "Échec de la mise à jour du stock.");
+      console.error('Erreur lors de la mise à jour du stock :', error);
+      alert(error.response?.data?.message || 'Échec de la mise à jour du stock.');
     } finally {
       setUpdatingStock(null); // Désactive le loader
     }
@@ -118,32 +118,24 @@ const Admin = () => {
               <p>
                 <strong>Status :</strong> {order.status}
               </p>
-              {order.status !== "Expédiée" && (
+              {order.status !== 'Expédiée' && (
                 <button
-                  onClick={() => handleOrderStatusChange(order._id, "Expédiée")}
+                  onClick={() => handleOrderStatusChange(order._id, 'Expédiée')}
                   className="bg-blue-500 text-white px-2 py-1 mt-2 rounded mr-2"
                   disabled={loadingOrder === order._id}
                 >
-                  {loadingOrder === order._id
-                    ? "Mise à jour..."
-                    : 'Changer état à "Expédiée"'}
+                  {loadingOrder === order._id ? 'Mise à jour...' : 'Changer état à "Expédiée"'}
                 </button>
               )}
 
-              {order.status !== "En cours de traitement" &&
-                order.status !== "Expédiée" && (
-                  <button
-                    onClick={() =>
-                      handleOrderStatusChange(
-                        order._id,
-                        "En cours de traitement"
-                      )
-                    }
-                    className="bg-green-500 text-white px-2 py-1 mt-2 rounded"
-                  >
-                    Valider la commande
-                  </button>
-                )}
+              {order.status !== 'En cours de traitement' && order.status !== 'Expédiée' && (
+                <button
+                  onClick={() => handleOrderStatusChange(order._id, 'En cours de traitement')}
+                  className="bg-green-500 text-white px-2 py-1 mt-2 rounded"
+                >
+                  Valider la commande
+                </button>
+              )}
 
               <button
                 onClick={() => setSelectedOrder(order)}
@@ -179,7 +171,7 @@ const Admin = () => {
                     type="number"
                     placeholder="Nouveau stock"
                     min="0"
-                    value={newStock[product._id] || ""}
+                    value={newStock[product._id] || ''}
                     className="border p-2 w-20"
                     onChange={(e) =>
                       setNewStock({
@@ -193,9 +185,7 @@ const Admin = () => {
                     className="bg-green-500 text-white px-2 py-1 ml-2 rounded"
                     disabled={updatingStock === product._id}
                   >
-                    {updatingStock === product._id
-                      ? "Mise à jour..."
-                      : "Mettre à jour"}
+                    {updatingStock === product._id ? 'Mise à jour...' : 'Mettre à jour'}
                   </button>
                 </td>
               </tr>

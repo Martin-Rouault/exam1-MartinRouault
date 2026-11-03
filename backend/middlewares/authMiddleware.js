@@ -15,7 +15,12 @@ exports.authenticateToken = (req, res, next) => {
   // Algorithme imposé : refuse les tokens signés autrement (ex. "alg": "none")
   jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] }, (err, user) => {
     if (err) {
-      logger.warn('audit: token refusé', { audit: true, reason: err.name, ip: req.ip, url: req.originalUrl });
+      logger.warn('audit: token refusé', {
+        audit: true,
+        reason: err.name,
+        ip: req.ip,
+        url: req.originalUrl,
+      });
       return res.status(403).json({ message: 'Token invalide ou expiré.' });
     }
     req.user = user;
@@ -31,7 +36,12 @@ exports.authenticateToken = (req, res, next) => {
  */
 exports.isAdmin = (req, res, next) => {
   if (req.user?.role !== 'admin') {
-    logger.warn('audit: accès administrateur refusé', { audit: true, userId: req.user?.userId, url: req.originalUrl, method: req.method });
+    logger.warn('audit: accès administrateur refusé', {
+      audit: true,
+      userId: req.user?.userId,
+      url: req.originalUrl,
+      method: req.method,
+    });
     return res.status(403).json({ message: 'Accès interdit' });
   }
   next();

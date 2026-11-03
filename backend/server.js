@@ -43,7 +43,7 @@ app.use('/api/auth', require('./routes/authRoutes'));
 app.get('/health', (req, res) => res.json({ status: 'ok', service: 'backend' }));
 
 // Gestionnaire d'erreurs : réponse JSON générique, jamais de pile d'appels envoyée au client
-// eslint-disable-next-line no-unused-vars
+
 app.use((err, req, res, next) => {
   if (err.type === 'entity.parse.failed') {
     return res.status(400).json({ message: 'Corps de requête JSON invalide.' });

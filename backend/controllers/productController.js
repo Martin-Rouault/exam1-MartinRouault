@@ -15,7 +15,10 @@ exports.getProducts = async (req, res) => {
     const products = await Product.find();
     res.json(products);
   } catch (error) {
-    logger.error('Erreur lors de la récupération des produits :', { error: error.message, stack: error.stack });
+    logger.error('Erreur lors de la récupération des produits :', {
+      error: error.message,
+      stack: error.stack,
+    });
     res.status(500).json({ message: 'Erreur lors de la récupération des produits.' });
   }
 };
@@ -33,8 +36,15 @@ exports.updateProductStock = async (req, res) => {
     const { productId } = req.params;
     const stock = Number(req.body.stock);
 
-    if (req.body.stock === undefined || req.body.stock === '' || !Number.isInteger(stock) || stock < 0) {
-      return res.status(400).json({ message: 'Le stock doit être un nombre entier positif ou nul.' });
+    if (
+      req.body.stock === undefined ||
+      req.body.stock === '' ||
+      !Number.isInteger(stock) ||
+      stock < 0
+    ) {
+      return res
+        .status(400)
+        .json({ message: 'Le stock doit être un nombre entier positif ou nul.' });
     }
 
     const product = await Product.findById(productId);
@@ -51,7 +61,10 @@ exports.updateProductStock = async (req, res) => {
     if (error.name === 'CastError') {
       return res.status(400).json({ message: 'Identifiant de produit invalide.' });
     }
-    logger.error('Erreur lors de la mise à jour du stock :', { error: error.message, stack: error.stack });
+    logger.error('Erreur lors de la mise à jour du stock :', {
+      error: error.message,
+      stack: error.stack,
+    });
     res.status(500).json({ message: 'Erreur serveur.' });
   }
 };

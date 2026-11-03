@@ -40,4 +40,6 @@ app.post('/update-stock', requireInternalToken, (req, res) => {
 // Sonde de santé (supervision, healthcheck Docker / Render)
 app.get('/health', (req, res) => res.json({ status: 'ok', service: 'stock-management' }));
 
-app.listen(PORT, () => logger.info('service de gestion des stocks démarré', { port: Number(PORT) }));
+app.listen(PORT, () =>
+  logger.info('service de gestion des stocks démarré', { port: Number(PORT) })
+);

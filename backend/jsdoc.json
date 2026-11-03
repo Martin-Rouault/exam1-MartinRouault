@@ -1,7 +1,21 @@
 {
   "source": {
-    "include": ["server.js", "config", "controllers", "middlewares", "models", "routes", "validators"],
-    "exclude": ["node_modules", "docs", "tests", "controllers/adminController.js", "routes/adminRoutes.js"],
+    "include": [
+      "server.js",
+      "config",
+      "controllers",
+      "middlewares",
+      "models",
+      "routes",
+      "validators"
+    ],
+    "exclude": [
+      "node_modules",
+      "docs",
+      "tests",
+      "controllers/adminController.js",
+      "routes/adminRoutes.js"
+    ],
     "includePattern": "\\.js$"
   },
   "opts": {
