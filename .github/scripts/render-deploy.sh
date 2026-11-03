@@ -7,10 +7,19 @@ triggered=0
 for name in BACKEND FRONTEND GATEWAY NOTIFICATIONS STOCK; do
   var="HOOK_${name}"
   url="${!var:-}"
+  # Nettoie les copier-coller : espaces, retours à la ligne, guillemets
+  url="$(printf '%s' "$url" | tr -d '[:space:]"'"'"'')"
   if [ -z "$url" ]; then
     echo "::warning::Deploy Hook absent pour ${name} : service ignoré"
     continue
   fi
+  case "$url" in
+    https://api.render.com/deploy/srv-*\?key=*) ;;
+    *)
+      echo "::error::Le secret RENDER_DEPLOY_HOOK_${name} n'est pas une URL de Deploy Hook Render valide (format attendu : https://api.render.com/deploy/srv-…?key=…)."
+      exit 1
+      ;;
+  esac
   echo "Déploiement de ${name}…"
   curl --fail --silent --show-error -X POST "$url" > /dev/null
   triggered=$((triggered + 1))

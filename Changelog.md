@@ -38,6 +38,9 @@ Chaque entrée du résumé renvoie à une fiche détaillée (avant / après / po
 #### Modifié — Emails
 - Serveur SMTP configurable : relais Brevo sur le port 2525 en production, Gmail en local → [C-4](#c-4)
 
+#### Corrigé — Gateway
+- Crash au démarrage si l'URL d'un microservice n'est pas définie → [G-1](#g-1)
+
 #### Sécurité (E28)
 - Prix et total de commande recalculés côté serveur → [SEC-1](#sec-1)
 - Contrôle d'accès : suppression de commande réservée aux administrateurs → [SEC-2](#sec-2)
@@ -190,6 +193,12 @@ Chaque entrée du résumé renvoie à une fiche détaillée (avant / après / po
   - expéditeur configurable avec `EMAIL_FROM` (adresse validée chez le fournisseur).
 - Variables ajoutées à `.env.example` et transmises par `docker-compose.yml`.
 
+<a id="g-1"></a>
+#### G-1 — Gateway : crash si un microservice n'est pas configuré
+- **Constat** (déploiement Render) : `AssertionError [ERR_ASSERTION]: Host should not be empty` dans `routes/notifi.js`. `express-http-proxy` refuse une URL vide : sans `NOTIFI_SERVICE_URL` ou `STOCK_SERVICE_URL`, le gateway entier s'arrêtait au démarrage.
+- **Correction** (`gateway/routes/notifi.js`, `gateway/routes/stock.js`) : si la variable est absente, le gateway démarre quand même ; seule la route concernée répond 503 « Service … non configuré » (avertissement dans les logs). Si le microservice est configuré mais injoignable, réponse 502 au lieu d'une erreur non gérée (`proxyErrorHandler`), avec un log d'erreur.
+- **Vérification** : gateway lancé sans aucune variable → `/health` 200, `/notify` 503 ; microservice arrêté → `/update-stock` 502.
+
 ### CI/CD (E24)
 
 <a id="ci-1"></a>
@@ -234,6 +243,7 @@ Chaque entrée du résumé renvoie à une fiche détaillée (avant / après / po
 
 <a id="doc-2"></a>
 #### DOC-2 — Tests unitaires
+- **Résultat** : 10 tests, 10 réussis.
 - `backend/tests/validation.test.js`, exécuté par `npm test` (runner natif `node:test`, sans dépendance supplémentaire ni base de données).
 - Couvre : injection NoSQL au login, mot de passe trop court, nom contenant du HTML / JavaScript, suppression du prix envoyé par le client, quantité et paiement invalides, enum des statuts, stock à 0, middleware `validate`, token absent ou `alg: none`, contrôle `isAdmin`.
 
