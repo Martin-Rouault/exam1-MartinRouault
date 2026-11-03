@@ -5,14 +5,17 @@ const User = require('../models/User'); // modèle utilisateur
 require('dotenv').config();
 const authLog = require('debug')('authRoutes:console');
 const logger = require('../config/logger');
+const { setAuthCookie, clearAuthCookie } = require('../utils/authCookie');
 //const sendEmail = require('../services/emailService')
 
 /**
- * Connecte un utilisateur et renvoie un JWT valable 1 heure.
+ * Connecte un utilisateur : dépose un JWT (valable 1 heure) dans un cookie HttpOnly.
+ * Le token est aussi renvoyé dans la réponse pour le repli en mémoire côté front
+ * (navigateurs qui bloquent le cookie) ; il n'est jamais stocké dans le localStorage.
  *
  * @route POST /api/auth/login
  * @param {express.Request} req - `req.body` : `{ username, password }` (validé par `loginSchema`).
- * @param {express.Response} res - 200 `{ token, role, username }` ; 401 identifiants incorrects ; 500 erreur serveur.
+ * @param {express.Response} res - 200 `{ token, role, username }` + cookie `token` ; 401 identifiants incorrects ; 500 erreur serveur.
  * @returns {Promise<void>}
  */
 exports.login = async (req, res) => {
@@ -45,6 +48,7 @@ exports.login = async (req, res) => {
       role: user.role,
       ip: req.ip,
     });
+    setAuthCookie(res, token);
     res.json({ token, role: user.role, username: user.username });
   } catch (error) {
     logger.error('Erreur lors de la connexion', { error: error.message, stack: error.stack });
@@ -111,4 +115,17 @@ exports.register = async (req, res) => {
     logger.error("Erreur lors de l'inscription", { error: error.message, stack: error.stack });
     res.status(500).json({ message: 'Une erreur est survenue.' });
   }
+};
+
+/**
+ * Déconnecte l'utilisateur en supprimant le cookie d'authentification.
+ *
+ * @route POST /api/auth/logout
+ * @param {express.Request} req
+ * @param {express.Response} res - 200 `{ message }`.
+ * @returns {void}
+ */
+exports.logout = (req, res) => {
+  clearAuthCookie(res);
+  res.json({ message: 'Déconnexion effectuée.' });
 };

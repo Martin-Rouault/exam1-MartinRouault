@@ -2,25 +2,22 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import { isLoggedIn, getUsername, logout } from '../services/auth';
 
 /**
  * Barre de navigation.
  * Affiche le nombre d'articles du panier, le nom de l'utilisateur connecté et les liens
- * connexion / inscription ou le bouton de déconnexion (qui efface token, nom et rôle du localStorage).
+ * connexion / inscription ou le bouton de déconnexion (qui supprime le cookie de session côté API et le nom / rôle stockés localement).
  */
 const Navbar = () => {
   const navigate = useNavigate();
   const { cart } = useCart();
 
-  // Simuler l'état d'authentification avec le localStorage
-  const isAuthenticated = !!localStorage.getItem('token');
-  const username = localStorage.getItem('username'); // Récupère le nom d'utilisateur si connecté
+  const isAuthenticated = isLoggedIn();
+  const username = getUsername();
 
-  const handleLogout = () => {
-    // Supprimer les informations d'authentification
-    localStorage.removeItem('token');
-    localStorage.removeItem('username');
-    localStorage.removeItem('role');
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
 

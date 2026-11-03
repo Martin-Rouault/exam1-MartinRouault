@@ -3,10 +3,12 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
+import { startSession } from '../services/auth';
 
 /**
  * Page de connexion.
- * En cas de succès, enregistre le token, le nom et le rôle puis redirige vers l'accueil ;
+ * En cas de succès, l'API dépose le JWT dans un cookie HttpOnly ; le front ne garde que le nom
+ * et le rôle (affichage) puis redirige vers l'accueil ;
  * sinon affiche le message renvoyé par l'API (ex. « Identifiants incorrects »).
  */
 const Login = () => {
@@ -20,12 +22,8 @@ const Login = () => {
     e.preventDefault();
     try {
       const response = await axios.post(`${API_BASE_URL}/auth/login`, credentials);
-      const { token, role, username } = response.data;
-
-      // Stockage du token et rôle dans le localStorage
-      localStorage.setItem('token', token);
-      localStorage.setItem('username', username);
-      localStorage.setItem('role', role);
+      // Le JWT est dans un cookie HttpOnly ; il n'est jamais écrit dans le localStorage
+      startSession(response.data);
 
       navigate('/'); // Redirige vers la page d'accueil après la connexion
     } catch (error) {

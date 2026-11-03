@@ -56,6 +56,7 @@ Chaque entrée du résumé renvoie à une fiche détaillée (avant / après / po
 - CORS restreint, en-têtes de sécurité (Helmet), corps limité, erreurs génériques → [SEC-6](#sec-6)
 - Microservices protégés par une clé interne, erreurs SMTP masquées → [SEC-7](#sec-7)
 - Dépendances : `jsonwebtoken` 9.0.3, compatible Node 25+ → [SEC-8](#sec-8)
+- JWT déplacé du `localStorage` vers un cookie HttpOnly, protection CSRF par origine → [SEC-9](#sec-9)
 
 #### Corrigé — Backend (E27)
 - Crash du serveur quand MongoDB est indisponible → [B-1](#b-1)
@@ -261,7 +262,8 @@ Chaque entrée du résumé renvoie à une fiche détaillée (avant / après / po
 #### DEP-1 — Mise à jour et audit
 - `body-parser` supprimé du microservice de notifications : Express intègre `express.json()` depuis la version 4.16, et le module n'est plus importé.
 - `npm update` (mises à jour compatibles avec les plages de version déclarées) puis `npm audit --omit=dev` dans chaque partie du projet.
-- Résultats : `[à compléter avec la sortie de npm audit]`.
+- Résultats : backend 10 vulnérabilités (dont 3 critiques) au premier build Render → **0** après mise à jour ; gateway **0** ; microservice notifications : 6 vulnérabilités signalées (1 critique) avant mise à jour, correction en cours (`npm audit fix`, puis mise à jour majeure de Nodemailer si nécessaire) ; frontend : audit en cours.
+- Racine (outils de développement ESLint / Prettier / npm-run-all) : 7 vulnérabilités modérées, sans impact en production (dépendances de développement non embarquées dans les images).
 - Mises à jour majeures non appliquées pendant l'examen (risque de régression) et proposées : Express 5, dernière version majeure de Mongoose, remplacement de Create React App (non maintenu) par Vite.
 
 ### Documentation et tests (E29)
@@ -276,7 +278,7 @@ Chaque entrée du résumé renvoie à une fiche détaillée (avant / après / po
 
 <a id="doc-2"></a>
 #### DOC-2 — Tests unitaires
-- **Résultat** : 10 tests, 10 réussis.
+- **Résultat** : 11 tests, 11 réussis (dont l'authentification par cookie, SEC-9).
 - `backend/tests/validation.test.js`, exécuté par `npm test` (runner natif `node:test`, sans dépendance supplémentaire ni base de données).
 - Couvre : injection NoSQL au login, mot de passe trop court, nom contenant du HTML / JavaScript, suppression du prix envoyé par le client, quantité et paiement invalides, enum des statuts, stock à 0, middleware `validate`, token absent ou `alg: none`, contrôle `isAdmin`.
 
@@ -314,7 +316,7 @@ Toutes les vérifications ci-dessous ont été exécutées sur l'API réelle (`s
 - **JWT** :
   - algorithme `HS256` imposé à la signature et à la vérification. **Vérification** : un token `"alg": "none"` se présentant comme admin → 403 ;
   - le serveur refuse de démarrer si `JWT_SECRET` est absent ou fait moins de 32 caractères. Le secret local (64 caractères hexadécimaux, 256 bits) est conforme ; un secret différent est utilisé en production.
-- **Reste à faire** : le token est stocké dans le `localStorage`. Le passage à un cookie `HttpOnly` nécessite que le front et l'API partagent un même domaine (sous-domaines `app.` / `api.`), ce qui dépend de E23.
+- Stockage du token : voir [SEC-9](#sec-9).
 
 <a id="sec-5"></a>
 #### SEC-5 — Secrets dans les logs
@@ -345,6 +347,28 @@ Les options obsolètes `useNewUrlParser` / `useUnifiedTopology` ont aussi été 
 - `jsonwebtoken` 9.0.2 → 9.0.3 (`jws` 4 / `jwa` 2.0.1) : `jwa` utilise désormais `crypto.timingSafeEqual` et ne charge plus `buffer-equal-constant-time` au démarrage. **Vérification** : signature et vérification d'un JWT avec `SlowBuffer` supprimé (comportement de Node 25+) → OK. Le problème [ENV-1](#env-1) est donc corrigé dans le code.
 - Ajouts : `joi`, `helmet`, `express-rate-limit`.
 - `npm audit` : à compléter (le build Render signalait 10 vulnérabilités dans le backend avant mise à jour).
+
+<a id="sec-9"></a>
+#### SEC-9 — JWT dans un cookie HttpOnly
+- **Faille** : le JWT était stocké dans le `localStorage`, lisible par n'importe quel script exécuté dans la page. Une faille XSS aurait suffi à voler la session.
+- **Correction backend** :
+  - `utils/authCookie.js` : à la connexion, le JWT est déposé dans un cookie `token` **HttpOnly** (inaccessible au JavaScript), durée de vie 1 h. En production : `Secure`, `SameSite=None` (le front et l'API sont sur deux sous-domaines de `onrender.com`, domaine public, donc deux sites différents) et `Partitioned` (CHIPS), accepté par les navigateurs qui bloquent les cookies tiers classiques. En local : `SameSite=Lax`.
+  - `authenticateToken` lit d'abord le cookie, puis l'en-tête `Authorization` en repli.
+  - Nouvelle route `POST /api/auth/logout` qui supprime le cookie.
+  - CORS : `credentials: true`, limité aux origines de `CORS_ORIGIN`.
+  - **Protection CSRF** : le cookie étant envoyé entre sites, toute requête qui modifie des données (`POST`, `PUT`, `DELETE`…) et porte une origine non autorisée est refusée (403, journalisée dans l'audit).
+- **Correction frontend** :
+  - nouveau `src/services/auth.js` : `axios.defaults.withCredentials = true` (envoi du cookie), gestion de la session, déconnexion via l'API ;
+  - le JWT n'est **plus jamais écrit dans le `localStorage`** (les anciens tokens y sont effacés au chargement). Seuls le nom d'utilisateur et le rôle, utilisés pour l'affichage, y restent ;
+  - repli pour les navigateurs qui refuseraient le cookie : le token renvoyé à la connexion est gardé **en mémoire uniquement** (perdu au rechargement) et envoyé en en-tête ;
+  - `services/api.js` et `services/adminApi.js` simplifiés (plus d'en-tête manuel), `Navbar`, `ProtectedRoute` et `AdminRoute` adaptés.
+- **Vérification** :
+  - connexion → `Set-Cookie: token=…; HttpOnly; Secure; Partitioned; SameSite=None` et `Access-Control-Allow-Credentials: true` ;
+  - requête authentifiée avec le cookie seul → acceptée ; sans cookie ni en-tête → 401 ;
+  - `DELETE` avec le cookie depuis une origine inconnue → 403 ; depuis le front autorisé → 200 ;
+  - déconnexion → cookie expiré ;
+  - test unitaire ajouté (cookie) : 11 tests, 11 réussis ; build du front OK.
+- **Évolution prévue** : avec un domaine commun (`app.` / `api.`, E23), passer à `SameSite=Lax` et supprimer le repli en mémoire.
 
 ### Backend
 

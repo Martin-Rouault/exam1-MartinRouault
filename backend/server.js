@@ -30,7 +30,25 @@ app.use(helmet());
 const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000')
   .split(',')
   .map((origin) => origin.trim());
-app.use(cors({ origin: allowedOrigins }));
+// credentials : autorise l'envoi du cookie d'authentification par le front (origines listées uniquement)
+app.use(cors({ origin: allowedOrigins, credentials: true }));
+
+// Protection CSRF : le cookie d'authentification étant envoyé entre sites (SameSite=None en production),
+// toute requête qui modifie des données et provient d'une origine non autorisée est refusée.
+app.use((req, res, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  const origin = req.get('origin');
+  if (origin && !allowedOrigins.includes(origin)) {
+    logger.warn('audit: requête refusée (origine non autorisée)', {
+      audit: true,
+      origin,
+      method: req.method,
+      url: req.originalUrl,
+    });
+    return res.status(403).json({ message: 'Origine non autorisée.' });
+  }
+  next();
+});
 
 // Corps JSON limité à 10 ko
 app.use(express.json({ limit: '10kb' }));

@@ -1,6 +1,7 @@
 // src/components/AdminRoute.js
 import React from 'react';
 import { Navigate } from 'react-router-dom';
+import { isLoggedIn, getRole } from '../services/auth';
 
 /**
  * Garde de route administrateur : redirige vers l'accueil si l'utilisateur n'est pas connecté
@@ -8,10 +9,7 @@ import { Navigate } from 'react-router-dom';
  * par l'API (middlewares authenticateToken + isAdmin).
  */
 const AdminRoute = ({ children }) => {
-  const token = localStorage.getItem('token');
-  const role = localStorage.getItem('role');
-
-  if (!token || role !== 'admin') {
+  if (!isLoggedIn() || getRole() !== 'admin') {
     return <Navigate to="/" replace />;
   }
 

@@ -1,15 +1,20 @@
 // backend/middlewares/authMiddleware.js
 const jwt = require('jsonwebtoken');
 const logger = require('../config/logger');
+const { readAuthCookie } = require('../utils/authCookie');
 
 /**
- * Vérifie le JWT transmis dans l'en-tête `Authorization: Bearer <token>`.
+ * Vérifie le JWT de la requête.
+ *
+ * Source principale : le cookie HttpOnly `token` déposé à la connexion.
+ * Repli : l'en-tête `Authorization: Bearer <token>`, pour les navigateurs qui refusent le cookie
+ * (cookie tiers bloqué) ; le front garde alors le token en mémoire uniquement, jamais dans le localStorage.
  * En cas de succès, le contenu du token ({ userId, role }) est placé dans `req.user`.
  *
  * @type {express.RequestHandler}
  */
 exports.authenticateToken = (req, res, next) => {
-  const token = req.headers['authorization']?.split(' ')[1];
+  const token = readAuthCookie(req) || req.headers['authorization']?.split(' ')[1];
   if (!token) return res.status(401).json({ message: 'Authentification requise.' });
 
   // Algorithme imposé : refuse les tokens signés autrement (ex. "alg": "none")

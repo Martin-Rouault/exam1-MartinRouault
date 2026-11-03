@@ -141,3 +141,16 @@ test('authenticateToken + isAdmin : un utilisateur "user" est refusé, un "admin
     assert.strictEqual(nextCalled, expectedNext, `rôle ${role}`);
   }
 });
+
+test('authenticateToken : accepte le JWT transmis par le cookie HttpOnly', () => {
+  const token = jwt.sign({ userId: 'u1', role: 'user' }, process.env.JWT_SECRET, {
+    algorithm: 'HS256',
+  });
+  const req = { headers: { cookie: `autre=1; token=${token}` }, originalUrl: '/api/orders' };
+  let nextCalled = false;
+  authenticateToken(req, mockRes(), () => {
+    nextCalled = true;
+  });
+  assert.strictEqual(nextCalled, true);
+  assert.strictEqual(req.user.userId, 'u1');
+});
